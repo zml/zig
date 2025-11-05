@@ -5985,6 +5985,7 @@ pub fn atomicPtrAlignment(
         .ve,
         .spirv64,
         .loongarch64,
+        .kvx,
         => 64,
 
         .aarch64,

@@ -940,6 +940,11 @@ const llvm_targets = [_]LlvmTarget{
         .td_name = "VE.td",
     },
     .{
+        .zig_name = "kvx",
+        .llvm_name = "KVX",
+        .td_name = "KVX.td",
+    },
+    .{
         .zig_name = "wasm",
         .llvm_name = "WebAssembly",
         .td_name = "WebAssembly.td",

@@ -64,6 +64,7 @@ pub const Os = struct {
         plan9,
         illumos,
         other,
+        cos,
 
         pub inline fn isDarwin(tag: Tag) bool {
             return switch (tag) {
@@ -171,6 +172,7 @@ pub const Os = struct {
                 .illumos,
                 .serenity,
                 .other,
+                .cos,
                 => .none,
 
                 .freebsd,
@@ -393,6 +395,7 @@ pub const Os = struct {
                 .illumos,
                 .serenity,
                 .other,
+                .cos,
                 => .{ .none = {} },
 
                 .freebsd => .{
@@ -579,6 +582,7 @@ pub const Os = struct {
             .glsl450,
             .vulkan,
             .plan9,
+            .cos,
             .other,
             => false,
         };
@@ -604,6 +608,7 @@ pub const sparc = @import("Target/sparc.zig");
 pub const spirv = @import("Target/spirv.zig");
 pub const s390x = @import("Target/s390x.zig");
 pub const ve = @import("Target/ve.zig");
+pub const kvx = @import("Target/kvx.zig");
 pub const wasm = @import("Target/wasm.zig");
 pub const x86 = @import("Target/x86.zig");
 pub const xtensa = @import("Target/xtensa.zig");
@@ -704,6 +709,7 @@ pub const Abi = enum {
             .solaris,
             .illumos,
             .serenity,
+            .cos,
             => .none,
         };
     }
@@ -1032,6 +1038,7 @@ pub const Cpu = struct {
         renderscript64,
         ve,
         spu_2,
+        kvx,
 
         pub inline fn isX86(arch: Arch) bool {
             return switch (arch) {
@@ -1200,6 +1207,7 @@ pub const Cpu = struct {
                 .spirv64 => .NONE,
                 .loongarch32 => .NONE,
                 .loongarch64 => .NONE,
+                .kvx => .NONE,
             };
         }
 
@@ -1266,6 +1274,7 @@ pub const Cpu = struct {
                 .spirv64 => .Unknown,
                 .loongarch32 => .Unknown,
                 .loongarch64 => .Unknown,
+                .kvx => .Unknown,
             };
         }
 
@@ -1320,6 +1329,7 @@ pub const Cpu = struct {
                 .loongarch32,
                 .loongarch64,
                 .arc,
+                .kvx,
                 => .little,
 
                 .armeb,
@@ -1401,6 +1411,7 @@ pub const Cpu = struct {
                 .xtensa => &xtensa.all_features,
                 .nvptx, .nvptx64 => &nvptx.all_features,
                 .ve => &ve.all_features,
+                .kvx => &kvx.all_features,
                 .wasm32, .wasm64 => &wasm.all_features,
 
                 else => &[0]Cpu.Feature{},
@@ -1431,6 +1442,7 @@ pub const Cpu = struct {
                 .xtensa => comptime allCpusFromDecls(xtensa.cpu),
                 .nvptx, .nvptx64 => comptime allCpusFromDecls(nvptx.cpu),
                 .ve => comptime allCpusFromDecls(ve.cpu),
+                .kvx => comptime allCpusFromDecls(kvx.cpu),
                 .wasm32, .wasm64 => comptime allCpusFromDecls(wasm.cpu),
 
                 else => &[0]*const Model{},
@@ -1523,6 +1535,7 @@ pub const Cpu = struct {
                 .x86_64 => &x86.cpu.x86_64,
                 .nvptx, .nvptx64 => &nvptx.cpu.sm_20,
                 .ve => &ve.cpu.generic,
+                .kvx => &kvx.cpu.kv4_1,
                 .wasm32, .wasm64 => &wasm.cpu.generic,
 
                 else => &S.generic_model,
@@ -1810,6 +1823,7 @@ pub const DynamicLinker = struct {
                 .loongarch32,
                 .loongarch64,
                 .xtensa,
+                .kvx,
                 => none,
             },
 
@@ -1864,6 +1878,7 @@ pub const DynamicLinker = struct {
             .driverkit,
             .shadermodel,
             .liteos,
+            .cos,
             => none,
         };
     }
@@ -1944,6 +1959,7 @@ pub fn ptrBitWidth_cpu_abi(cpu: Cpu, abi: Abi) u16 {
         .ve,
         .spirv64,
         .loongarch64,
+        .kvx,
         => 64,
 
         .sparc => if (std.Target.sparc.featureSetHas(cpu.features, .v9)) 64 else 32,
@@ -1995,6 +2011,7 @@ pub fn stackAlignment(target: Target) u16 {
             else => 8,
             .linux => 16,
         },
+        .kvx => 32,
         else => @divExact(target.ptrBitWidth(), 8),
     };
 }
@@ -2362,6 +2379,8 @@ pub fn c_type_bit_size(target: Target, c_type: CType) u16 {
             .longdouble => return 80,
         },
 
+        .cos => return 8,
+
         .cloudabi,
         .kfreebsd,
         .lv2,
@@ -2485,6 +2504,7 @@ pub fn c_type_alignment(target: Target, c_type: CType) u16 {
             .x86_64,
             .wasm32,
             .wasm64,
+            .kvx,
             => 16,
 
             .spirv => @panic("TODO what should this value be?"),
@@ -2613,6 +2633,7 @@ pub fn c_type_preferred_alignment(target: Target, c_type: CType) u16 {
             .x86_64,
             .wasm32,
             .wasm64,
+            .kvx,
             => 16,
 
             .spirv => @panic("TODO what should this value be?"),

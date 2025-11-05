@@ -189,7 +189,8 @@ enum ZigLLVM_ArchType {
     ZigLLVM_renderscript32, // 32-bit RenderScript
     ZigLLVM_renderscript64, // 64-bit RenderScript
     ZigLLVM_ve,             // NEC SX-Aurora Vector Engine
-    ZigLLVM_LastArchType = ZigLLVM_ve
+    ZigLLVM_kvx,
+    ZigLLVM_LastArchType = ZigLLVM_kvx
 };
 
 enum ZigLLVM_VendorType {
@@ -208,8 +209,9 @@ enum ZigLLVM_VendorType {
     ZigLLVM_Mesa,
     ZigLLVM_SUSE,
     ZigLLVM_OpenEmbedded,
+    ZigLLVM_Kalray,
 
-    ZigLLVM_LastVendorType = ZigLLVM_OpenEmbedded
+    ZigLLVM_LastVendorType = ZigLLVM_Kalray
 };
 
 // synchronize with llvm/include/ADT/Triple.h::OsType
@@ -253,6 +255,8 @@ enum ZigLLVM_OSType {
     ZigLLVM_Hurd,       // GNU/Hurd
     ZigLLVM_WASI,       // Experimental WebAssembly OS
     ZigLLVM_Emscripten,
+    ZigLLVM_ClusterOS,  // Kalray ClusterOS
+    ZigLLVM_KVXOSPorting, // Kalray OSPorting
     ZigLLVM_ShaderModel, // DirectX ShaderModel
     ZigLLVM_LiteOS,
     ZigLLVM_Serenity,

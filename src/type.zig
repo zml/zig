@@ -1653,6 +1653,7 @@ pub const Type = struct {
             .loongarch32,
             .loongarch64,
             .xtensa,
+            .kvx,
             => 16,
         };
     }

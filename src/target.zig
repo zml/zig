@@ -172,6 +172,7 @@ pub fn hasLlvmSupport(target: std.Target, ofmt: std.Target.ObjectFormat) bool {
         .renderscript32,
         .renderscript64,
         .ve,
+        .kvx,
         => true,
 
         .spu_2 => false,

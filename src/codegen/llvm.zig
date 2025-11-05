@@ -103,6 +103,7 @@ pub fn targetTriple(allocator: Allocator, target: std.Target) ![]const u8 {
         .renderscript32 => "renderscript32",
         .renderscript64 => "renderscript64",
         .ve => "ve",
+        .kvx => "kvx",
         .spu_2 => return error.@"LLVM backend does not support SPU Mark II",
     };
     try llvm_triple.appendSlice(llvm_arch);
@@ -148,6 +149,7 @@ pub fn targetTriple(allocator: Allocator, target: std.Target) ![]const u8 {
         .visionos => "xros",
         .serenity => "serenity",
         .vulkan => "vulkan",
+        .cos => "cos",
 
         .opencl,
         .glsl450,
@@ -269,6 +271,7 @@ pub fn targetOs(os_tag: std.Target.Os.Tag) llvm.OSType {
         .liteos => .LiteOS,
         .vulkan => .Vulkan,
         .serenity => .Serenity,
+        .cos => .ClusterOS,
     };
 }
 
@@ -335,6 +338,7 @@ pub fn targetArch(arch_tag: std.Target.Cpu.Arch) llvm.ArchType {
         .renderscript32 => .renderscript32,
         .renderscript64 => .renderscript64,
         .ve => .ve,
+        .kvx => .kvx,
         .spu_2 => .UnknownArch,
     };
 }
@@ -358,6 +362,12 @@ const DataLayoutBuilder = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) @TypeOf(writer).Error!void {
+        // ZML: hack
+        if (self.target.cpu.arch == .kvx) {
+            try writer.writeAll("e-S256-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-v64:64-v128:128-v256:256-v512:256-v1024:256-f16:16-f32:32-f64:64-a:0:64-m:e-n32:64");
+            return;
+        }
+
         try writer.writeByte(switch (self.target.cpu.arch.endian()) {
             .little => 'e',
             .big => 'E',
@@ -12057,6 +12067,12 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             llvm.LLVMInitializeLoongArchTargetMC();
             llvm.LLVMInitializeLoongArchAsmPrinter();
             llvm.LLVMInitializeLoongArchAsmParser();
+        },
+        .kvx => {
+            llvm.LLVMInitializeKVXTarget();
+            llvm.LLVMInitializeKVXTargetInfo();
+            llvm.LLVMInitializeKVXTargetMC();
+            llvm.LLVMInitializeKVXAsmPrinter();
         },
 
         // LLVM backends that have no initialization functions.
