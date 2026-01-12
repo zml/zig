@@ -26054,10 +26054,12 @@ fn validateExternType(
             if (position != .other) return false;
             // For now we want to authorize PTX kernel to use zig objects, even if we end up exposing the ABI.
             // The goal is to experiment with more integrated CPU/GPU code.
-            if (ty.fnCallingConvention(zcu) == .nvptx_kernel) {
-                return true;
-            }
-            return !target_util.fnCallConvAllowsZigTypes(ty.fnCallingConvention(zcu));
+            return switch (ty.fnCallingConvention(zcu)) {
+                .nvptx_kernel,
+                .kvx_lp64,
+                .kvx_ilp32 => true,
+                else => |cc| !target_util.fnCallConvAllowsZigTypes(cc),
+            };
         },
         .@"enum" => {
             return sema.validateExternType(ty.intTagType(zcu), position);
