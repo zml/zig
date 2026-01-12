@@ -875,6 +875,7 @@ pub fn fnCallConvAllowsZigTypes(cc: std.builtin.CallingConvention) bool {
         // we end up exposing the ABI. The goal is to experiment with more
         // integrated CPU/GPU code.
         .nvptx_kernel => true,
+        .kvx_lp64, .kvx_ilp32 => true,
         else => false,
     };
 }
