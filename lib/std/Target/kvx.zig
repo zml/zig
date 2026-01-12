@@ -49,14 +49,14 @@ pub const all_features = blk: {
 pub const cpu = struct {
     pub const coolidge_v1: CpuModel = .{
         .name = "coolidge_v1",
-        .llvm_name = null,
+        .llvm_name = "kv3-1",
         .features = featureSet(&[_]Feature{
             .v3_1,
         }),
     };
     pub const coolidge_v2: CpuModel = .{
         .name = "coolidge_v2",
-        .llvm_name = null,
+        .llvm_name = "kv3-2",
         .features = featureSet(&[_]Feature{
             .v3_2,
         }),
