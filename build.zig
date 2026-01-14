@@ -128,6 +128,11 @@ pub fn build(b: *std.Build) !void {
         "llvm-has-xtensa",
         "Whether LLVM has the experimental target xtensa enabled",
     ) orelse false;
+    const llvm_has_kvx = b.option(
+        bool,
+        "llvm-has-kvx",
+        "Whether LLVM has the experimental target xtensa enabled",
+    ) orelse false;
     const enable_ios_sdk = b.option(bool, "enable-ios-sdk", "Run tests requiring presence of iOS SDK and frameworks") orelse false;
     const enable_macos_sdk = b.option(bool, "enable-macos-sdk", "Run tests requiring presence of macOS SDK and frameworks") orelse enable_ios_sdk;
     const enable_symlinks_windows = b.option(bool, "enable-symlinks-windows", "Run tests requiring presence of symlinks on Windows") orelse false;
@@ -339,6 +344,7 @@ pub fn build(b: *std.Build) !void {
                 .llvm_has_csky = llvm_has_csky,
                 .llvm_has_arc = llvm_has_arc,
                 .llvm_has_xtensa = llvm_has_xtensa,
+                .llvm_has_kvx = llvm_has_kvx,
             });
         }
         if (target.result.os.tag == .windows) {
@@ -910,6 +916,7 @@ fn addStaticLlvmOptionsToModule(mod: *std.Build.Module, options: struct {
     llvm_has_csky: bool,
     llvm_has_arc: bool,
     llvm_has_xtensa: bool,
+    llvm_has_kvx: bool,
 }) !void {
     // Adds the Zig C++ sources which both stage1 and stage2 need.
     //
@@ -949,6 +956,10 @@ fn addStaticLlvmOptionsToModule(mod: *std.Build.Module, options: struct {
     };
 
     if (options.llvm_has_xtensa) for (llvm_libs_xtensa) |lib_name| {
+        mod.linkSystemLibrary(lib_name, lsl_options);
+    };
+
+    if (options.llvm_has_kvx) for (llvm_libs_kvx) |lib_name| {
         mod.linkSystemLibrary(lib_name, lsl_options);
     };
 
@@ -1476,6 +1487,12 @@ const llvm_libs_xtensa = [_][]const u8{
     "LLVMXtensaCodeGen",
     "LLVMXtensaDesc",
     "LLVMXtensaInfo",
+};
+const llvm_libs_kvx = [_][]const u8{
+    "LLVMKVXCodeGen",
+    "LLVMKVXDesc",
+    "LLVMKVXAsmPrinter",
+    "LLVMKVXInfo",
 };
 
 fn generateLangRef(b: *std.Build) std.Build.LazyPath {
