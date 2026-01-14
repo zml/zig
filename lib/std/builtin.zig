@@ -529,6 +529,12 @@ pub const AddressSpace = enum(u5) {
 
     /// This address space only addresses the "lookup" ram
     lut,
+
+    // KVX address spaces.
+    bypass,
+    preload,
+    speculate,
+    scall,
 };
 
 /// This data structure is used by the Zig language code generation and
