@@ -2274,6 +2274,7 @@ pub fn supportsAddressSpace(
         .constant => is_gpu and (context == null or context == .constant),
         .param => is_nvptx,
         .input, .output, .uniform, .push_constant, .storage_buffer, .physical_storage_buffer => is_spirv,
+        .bypass, .preload, .speculate, .scall => arch == .kvx,
     };
 }
 

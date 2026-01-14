@@ -1986,6 +1986,18 @@ pub const AddrSpace = enum(u24) {
         pub const funcref: AddrSpace = @enumFromInt(20);
     };
 
+    // See llvm/include/llvm/Target/KVX/KVXCommon.h
+    pub const kvx = struct {
+        pub const normal: AddrSpace = @enumFromInt(0);
+        pub const ocl_global: AddrSpace = @enumFromInt(1);
+        pub const ocl_constant: AddrSpace = @enumFromInt(2);
+        pub const ocl_local: AddrSpace = @enumFromInt(3);
+        pub const bypass: AddrSpace = @enumFromInt(256);
+        pub const preload: AddrSpace = @enumFromInt(257);
+        pub const speculate: AddrSpace = @enumFromInt(258);
+        pub const scall: AddrSpace = @enumFromInt(259);
+    };
+
     pub fn format(addr_space: AddrSpace, w: *Writer) Writer.Error!void {
         return Prefixed.format(.{ .addr_space = addr_space, .prefix = "" }, w);
     }
