@@ -67,6 +67,8 @@ pub const Os = struct {
         opengl,
         vulkan,
 
+        cos,
+
         // LLVM tags deliberately omitted:
         // - bridgeos
         // - cheriotrtos
@@ -169,6 +171,8 @@ pub const Os = struct {
                 .emscripten,
 
                 .mesa3d,
+
+                .cos,
                 => .none,
 
                 .contiki,
@@ -397,6 +401,7 @@ pub const Os = struct {
                 .emscripten,
 
                 .mesa3d,
+                .cos,
                 => .{ .none = {} },
 
                 .contiki => .{
@@ -930,6 +935,7 @@ pub const Abi = enum {
             .opencl,
             .opengl,
             .vulkan,
+            .cos,
             => .none,
         };
     }
@@ -2183,6 +2189,7 @@ pub fn requiresLibC(target: *const Target) bool {
         .openbsd,
         .haiku,
         .serenity,
+        .cos,
         => true,
 
         // Android API levels prior to 29 did not have native TLS support. For these API levels, TLS
@@ -2345,6 +2352,7 @@ pub const DynamicLinker = struct {
             .tvos,
             .visionos,
             .watchos,
+            .cos,
             => .arch_os,
             .hurd,
             .linux,
@@ -2805,6 +2813,7 @@ pub const DynamicLinker = struct {
             .ps3,
             .ps4,
             .ps5,
+            .cos,
             => none,
         } catch unreachable;
     }
@@ -3132,6 +3141,7 @@ pub fn cTypeBitSize(target: *const Target, c_type: CType) u16 {
         .hurd,
         .illumos,
         .linux,
+        .cos,
         .plan9,
         .rtems,
         .serenity,

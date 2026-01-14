@@ -239,6 +239,7 @@ pub fn targetTriple(allocator: Allocator, target: *const std.Target) ![]const u8
         .serenity => "serenity",
         .vulkan => "vulkan",
         .managarm => "managarm",
+        .cos => "cos",
 
         .@"3ds",
         .contiki,
