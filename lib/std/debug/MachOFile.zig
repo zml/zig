@@ -1,7 +1,13 @@
 mapped_memory: []align(std.heap.page_size_min) const u8,
+path: []const u8,
 symbols: []const Symbol,
 strings: []const u8,
 text_vmaddr: u64,
+uuid: ?Uuid,
+adjacent_dsym_state: enum {
+    unchecked,
+    missing,
+},
 
 /// Key is index into `strings` of the file path.
 ofiles: std.AutoArrayHashMapUnmanaged(u32, Error!OFile),
@@ -23,6 +29,7 @@ pub fn deinit(mf: *MachOFile, gpa: Allocator) void {
         of.symbols_by_name.deinit(gpa);
     }
     mf.ofiles.deinit(gpa);
+    gpa.free(mf.path);
     gpa.free(mf.symbols);
     posix.munmap(mf.mapped_memory);
 }
@@ -35,6 +42,8 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
 
     const all_mapped_memory = try mapDebugInfoFile(io, path);
     errdefer posix.munmap(all_mapped_memory);
+    const owned_path = try gpa.dupe(u8, path);
+    errdefer gpa.free(owned_path);
 
     // In most cases, the file we just mapped is a Mach-O binary. However, it could be a "universal
     // binary": a simple file format which contains Mach-O binaries for multiple targets. For
@@ -88,21 +97,26 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
     if (hdr.magic != macho.MH_MAGIC_64)
         return error.InvalidMachO;
 
-    const symtab: macho.symtab_command, const text_vmaddr: u64 = lcs: {
+    const symtab: macho.symtab_command, const text_vmaddr: u64, const uuid: ?Uuid = lcs: {
         var it: macho.LoadCommandIterator = try .init(&hdr, mapped_macho[@sizeOf(macho.mach_header_64)..]);
         var symtab: ?macho.symtab_command = null;
         var text_vmaddr: ?u64 = null;
+        var uuid: ?Uuid = null;
         while (try it.next()) |cmd| switch (cmd.hdr.cmd) {
             .SYMTAB => symtab = cmd.cast(macho.symtab_command) orelse return error.InvalidMachO,
             .SEGMENT_64 => if (cmd.cast(macho.segment_command_64)) |seg_cmd| {
                 if (!mem.eql(u8, seg_cmd.segName(), "__TEXT")) continue;
                 text_vmaddr = seg_cmd.vmaddr;
             },
+            .UUID => if (cmd.cast(macho.uuid_command)) |uuid_cmd| {
+                uuid = uuid_cmd.uuid;
+            },
             else => {},
         };
         break :lcs .{
             symtab orelse return error.MissingDebugInfo,
             text_vmaddr orelse return error.MissingDebugInfo,
+            uuid,
         };
     };
 
@@ -233,10 +247,13 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
 
     return .{
         .mapped_memory = all_mapped_memory,
+        .path = owned_path,
         .symbols = symbols_slice,
         .strings = strings,
         .ofiles = .empty,
         .text_vmaddr = text_vmaddr,
+        .uuid = uuid,
+        .adjacent_dsym_state = .unchecked,
     };
 }
 pub fn getDwarfForAddress(mf: *MachOFile, gpa: Allocator, io: Io, vaddr: u64) !struct { *Dwarf, u64 } {
@@ -545,4 +562,5 @@ const testing = std.testing;
 
 const builtin = @import("builtin");
 
+const Uuid = [16]u8;
 const MachOFile = @This();
