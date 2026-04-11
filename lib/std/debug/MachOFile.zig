@@ -106,6 +106,9 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
         fun_size,
         ensym,
     } = .init;
+    // If the STABS stream is malformed, keep the normal symtab-derived symbols and let later
+    // resolution paths (e.g. adjacent dSYM or `N_OSO` fallbacks) attempt DWARF lookup.
+    var stabs_usable = true;
 
     var sym_r: Io.Reader = .fixed(mapped_macho[symtab.symoff..]);
     for (0..symtab.nsyms) |_| {
@@ -132,6 +135,7 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
             }
             continue;
         }
+        if (!stabs_usable) continue;
 
         // TODO handle globals N_GSYM, and statics N_STSYM
         switch (sym.n_type.stab) {
@@ -140,7 +144,10 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
                     state = .oso_open;
                     ofile = sym.n_strx;
                 },
-                else => return error.InvalidMachO,
+                else => {
+                    stabs_usable = false;
+                    continue;
+                },
             },
             .bnsym => switch (state) {
                 .oso_open, .ensym => {
@@ -151,7 +158,10 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
                         .ofile = ofile,
                     };
                 },
-                else => return error.InvalidMachO,
+                else => {
+                    stabs_usable = false;
+                    continue;
+                },
             },
             .fun => switch (state) {
                 .bnsym => {
@@ -161,7 +171,10 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
                 .fun_strx => {
                     state = .fun_size;
                 },
-                else => return error.InvalidMachO,
+                else => {
+                    stabs_usable = false;
+                    continue;
+                },
             },
             .ensym => switch (state) {
                 .fun_size => {
@@ -177,20 +190,26 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
                         }
                     }
                 },
-                else => return error.InvalidMachO,
+                else => {
+                    stabs_usable = false;
+                    continue;
+                },
             },
             .so => switch (state) {
                 .init, .oso_close => {},
                 .oso_open, .ensym => {
                     state = .oso_close;
                 },
-                else => return error.InvalidMachO,
+                else => {
+                    stabs_usable = false;
+                    continue;
+                },
             },
             else => {},
         }
     }
 
-    switch (state) {
+    switch (if (stabs_usable) state else .init) {
         .init => {
             // Missing STAB symtab entries is still okay, unless there were also no normal symbols.
             if (symbols.items.len == 0) return error.MissingDebugInfo;
