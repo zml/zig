@@ -1,0 +1,23 @@
+# Adjacent dSYM support for Darwin std.debug
+
+- [ ] Add the implementation plan and define the runtime design constraints.
+  - Keep current `N_OSO` / self-open behavior as fallback.
+  - Prefer an adjacent `<binary>.dSYM/Contents/Resources/DWARF/<basename(binary)>` when present.
+  - Resolve the adjacent dSYM relative to the loaded image path, never relative to `cwd`.
+  - Only use the dSYM when its Mach-O UUID matches the loaded image UUID.
+- [ ] Extend `lib/std/debug/MachOFile.zig` with the metadata needed to support adjacent dSYM lookup.
+  - Record the loaded image path inside `MachOFile`.
+  - Parse and retain `LC_UUID` from the main image.
+  - Add cached adjacent dSYM state to avoid reparsing on every frame lookup.
+- [ ] Implement adjacent dSYM loading and direct DWARF parsing.
+  - Add a direct-Mach-O DWARF sidecar loader for `MH_DSYM` files.
+  - Build the adjacent dSYM path from the image path.
+  - Load and cache the sidecar lazily.
+  - Ignore missing or mismatched dSYM files and preserve fallback behavior.
+- [ ] Prefer adjacent dSYM DWARF for symbolization and preserve current fallback.
+  - In `getDwarfForAddress`, use the cached adjacent dSYM first when available.
+  - Fall back to current `N_OSO` object/archive reopening logic when no usable dSYM exists.
+  - Keep `SelfInfo/MachO.zig` and `Info.zig` working through the shared `MachOFile` path.
+- [ ] Verify on macOS and capture the result in this checklist.
+  - Run focused stdlib tests for the touched code.
+  - Run a local stacktrace repro against the updated stdlib and confirm adjacent dSYM resolution works.
