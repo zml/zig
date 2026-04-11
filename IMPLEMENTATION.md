@@ -14,7 +14,7 @@
   - Build the adjacent dSYM path from the image path.
   - Load and cache the sidecar lazily.
   - Ignore missing or mismatched dSYM files and preserve fallback behavior.
-- [ ] Prefer adjacent dSYM DWARF for symbolization and preserve current fallback.
+- [x] Prefer adjacent dSYM DWARF for symbolization and preserve current fallback.
   - In `getDwarfForAddress`, use the cached adjacent dSYM first when available.
   - Fall back to current `N_OSO` object/archive reopening logic when no usable dSYM exists.
   - Keep `SelfInfo/MachO.zig` and `Info.zig` working through the shared `MachOFile` path.

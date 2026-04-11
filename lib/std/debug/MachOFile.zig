@@ -230,6 +230,18 @@ fn getAdjacentDsym(mf: *MachOFile, gpa: Allocator, io: Io) !*DsymFile {
 }
 
 pub fn getDwarfForAddress(mf: *MachOFile, gpa: Allocator, io: Io, vaddr: u64) !struct { *Dwarf, u64 } {
+    if (mf.getAdjacentDsym(gpa, io)) |dsym| {
+        return .{ &dsym.dwarf, vaddr };
+    } else |err| switch (err) {
+        error.MissingDebugInfo,
+        error.InvalidMachO,
+        error.InvalidDwarf,
+        error.UnsupportedDebugInfo,
+        error.ReadFailed,
+        => {},
+        error.OutOfMemory => |e| return e,
+    }
+
     const symbol = Symbol.find(mf.symbols, vaddr) orelse return error.MissingDebugInfo;
 
     if (symbol.ofile == Symbol.unknown_ofile) return error.MissingDebugInfo;
