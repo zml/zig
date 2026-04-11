@@ -9,7 +9,7 @@
   - Record the loaded image path inside `MachOFile`.
   - Parse and retain `LC_UUID` from the main image.
   - Add cached adjacent dSYM state to avoid reparsing on every frame lookup.
-- [ ] Implement adjacent dSYM loading and direct DWARF parsing.
+- [x] Implement adjacent dSYM loading and direct DWARF parsing.
   - Add a direct-Mach-O DWARF sidecar loader for `MH_DSYM` files.
   - Build the adjacent dSYM path from the image path.
   - Load and cache the sidecar lazily.

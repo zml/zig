@@ -1,13 +1,11 @@
 mapped_memory: []align(std.heap.page_size_min) const u8,
 path: []const u8,
+arch: std.Target.Cpu.Arch,
 symbols: []const Symbol,
 strings: []const u8,
 text_vmaddr: u64,
 uuid: ?Uuid,
-adjacent_dsym_state: enum {
-    unchecked,
-    missing,
-},
+adjacent_dsym: ?(Error!DsymFile),
 
 /// Key is index into `strings` of the file path.
 ofiles: std.AutoArrayHashMapUnmanaged(u32, Error!OFile),
@@ -22,6 +20,11 @@ pub const Error = error{
 };
 
 pub fn deinit(mf: *MachOFile, gpa: Allocator) void {
+    if (mf.adjacent_dsym) |*maybe_dsym| {
+        if (maybe_dsym.*) |*dsym| {
+            dsym.deinit(gpa);
+        } else |_| {}
+    }
     for (mf.ofiles.values()) |*maybe_of| {
         const of = &(maybe_of.* catch continue);
         posix.munmap(of.mapped_memory);
@@ -45,48 +48,7 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
     const owned_path = try gpa.dupe(u8, path);
     errdefer gpa.free(owned_path);
 
-    // In most cases, the file we just mapped is a Mach-O binary. However, it could be a "universal
-    // binary": a simple file format which contains Mach-O binaries for multiple targets. For
-    // instance, `/usr/lib/dyld` is currently distributed as a universal binary containing images
-    // for both ARM64 macOS and x86_64 macOS.
-    if (all_mapped_memory.len < 4) return error.InvalidMachO;
-    const magic = std.mem.readInt(u32, all_mapped_memory.ptr[0..4], .little);
-
-    // The contents of a Mach-O file, which may or may not be the whole of `all_mapped_memory`.
-    const mapped_macho = switch (magic) {
-        macho.MH_MAGIC_64 => all_mapped_memory,
-
-        macho.FAT_CIGAM => mapped_macho: {
-            // This is the universal binary format (aka a "fat binary").
-            var fat_r: Io.Reader = .fixed(all_mapped_memory);
-            const hdr = fat_r.takeStruct(macho.fat_header, .big) catch |err| switch (err) {
-                error.ReadFailed => unreachable,
-                error.EndOfStream => return error.InvalidMachO,
-            };
-            const want_cpu_type = switch (arch) {
-                .x86_64 => macho.CPU_TYPE_X86_64,
-                .aarch64 => macho.CPU_TYPE_ARM64,
-                else => unreachable,
-            };
-            for (0..hdr.nfat_arch) |_| {
-                const fat_arch = fat_r.takeStruct(macho.fat_arch, .big) catch |err| switch (err) {
-                    error.ReadFailed => unreachable,
-                    error.EndOfStream => return error.InvalidMachO,
-                };
-                if (fat_arch.cputype != want_cpu_type) continue;
-                if (fat_arch.offset + fat_arch.size > all_mapped_memory.len) return error.InvalidMachO;
-                break :mapped_macho all_mapped_memory[fat_arch.offset..][0..fat_arch.size];
-            }
-            // `arch` was not present in the fat binary.
-            return error.MissingDebugInfo;
-        },
-
-        // Even on modern 64-bit targets, this format doesn't seem to be too extensively used. It
-        // will be fairly easy to add support here if necessary; it's very similar to above.
-        macho.FAT_CIGAM_64 => return error.UnsupportedDebugInfo,
-
-        else => return error.InvalidMachO,
-    };
+    const mapped_macho = try selectMachOSlice(all_mapped_memory, arch);
 
     var r: Io.Reader = .fixed(mapped_macho);
     const hdr = r.takeStruct(macho.mach_header_64, .little) catch |err| switch (err) {
@@ -248,14 +210,25 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
     return .{
         .mapped_memory = all_mapped_memory,
         .path = owned_path,
+        .arch = arch,
         .symbols = symbols_slice,
         .strings = strings,
         .ofiles = .empty,
         .text_vmaddr = text_vmaddr,
         .uuid = uuid,
-        .adjacent_dsym_state = .unchecked,
+        .adjacent_dsym = null,
     };
 }
+
+fn getAdjacentDsym(mf: *MachOFile, gpa: Allocator, io: Io) !*DsymFile {
+    if (mf.adjacent_dsym == null) {
+        mf.adjacent_dsym = loadAdjacentDsym(gpa, io, mf.path, mf.arch, mf.uuid);
+    }
+    if (mf.adjacent_dsym.?) |*dsym| {
+        return dsym;
+    } else |err| return err;
+}
+
 pub fn getDwarfForAddress(mf: *MachOFile, gpa: Allocator, io: Io, vaddr: u64) !struct { *Dwarf, u64 } {
     const symbol = Symbol.find(mf.symbols, vaddr) orelse return error.MissingDebugInfo;
 
@@ -319,6 +292,16 @@ const OFile = struct {
     };
 };
 
+const DsymFile = struct {
+    mapped_memory: []align(std.heap.page_size_min) const u8,
+    dwarf: Dwarf,
+
+    fn deinit(df: *DsymFile, gpa: Allocator) void {
+        df.dwarf.deinit(gpa);
+        posix.munmap(df.mapped_memory);
+    }
+};
+
 const Symbol = struct {
     strx: u32,
     addr: u64,
@@ -371,6 +354,108 @@ const Symbol = struct {
 };
 test {
     _ = Symbol;
+}
+
+fn adjacentDsymPath(allocator: Allocator, binary_path: []const u8) ![]u8 {
+    const sep = std.fs.path.sep_str;
+    return std.fmt.allocPrint(
+        allocator,
+        "{s}.dSYM" ++ sep ++ "Contents" ++ sep ++ "Resources" ++ sep ++ "DWARF" ++ sep ++ "{s}",
+        .{ binary_path, std.fs.path.basename(binary_path) },
+    );
+}
+
+fn loadAdjacentDsym(
+    gpa: Allocator,
+    io: Io,
+    binary_path: []const u8,
+    arch: std.Target.Cpu.Arch,
+    opt_expected_uuid: ?Uuid,
+) !DsymFile {
+    const expected_uuid = opt_expected_uuid orelse return error.MissingDebugInfo;
+    const dsym_path = try adjacentDsymPath(gpa, binary_path);
+    defer gpa.free(dsym_path);
+    return loadDsymFile(gpa, io, dsym_path, arch, expected_uuid);
+}
+
+fn loadDsymFile(
+    gpa: Allocator,
+    io: Io,
+    path: []const u8,
+    arch: std.Target.Cpu.Arch,
+    expected_uuid: Uuid,
+) !DsymFile {
+    const all_mapped_memory = try mapDebugInfoFile(io, path);
+    errdefer posix.munmap(all_mapped_memory);
+    const mapped_macho = try selectMachOSlice(all_mapped_memory, arch);
+
+    var r: Io.Reader = .fixed(mapped_macho);
+    const hdr = r.takeStruct(macho.mach_header_64, .little) catch |err| switch (err) {
+        error.ReadFailed => unreachable,
+        error.EndOfStream => return error.InvalidMachO,
+    };
+    if (hdr.magic != macho.MH_MAGIC_64) return error.InvalidMachO;
+    if (hdr.filetype != macho.MH_DSYM) return error.MissingDebugInfo;
+
+    var uuid: ?Uuid = null;
+    var sections: Dwarf.SectionArray = @splat(null);
+
+    var it: macho.LoadCommandIterator = try .init(&hdr, mapped_macho[@sizeOf(macho.mach_header_64)..]);
+    while (try it.next()) |lc| switch (lc.hdr.cmd) {
+        .UUID => if (lc.cast(macho.uuid_command)) |uuid_cmd| {
+            uuid = uuid_cmd.uuid;
+        },
+        .SEGMENT_64 => if (lc.cast(macho.segment_command_64)) |seg_cmd| {
+            if (!mem.eql(u8, "__DWARF", seg_cmd.segName())) continue;
+
+            for (lc.getSections()) |sect_raw| {
+                var sect = sect_raw;
+                if (builtin.cpu.arch.endian() != .little) std.mem.byteSwapAllFields(macho.section_64, &sect);
+
+                const section_index: usize = inline for (@typeInfo(Dwarf.Section.Id).@"enum".fields, 0..) |section, i| {
+                    if (mem.eql(u8, "__" ++ section.name, sect.sectName())) break i;
+                } else continue;
+
+                if (mapped_macho.len < sect.offset + sect.size) return error.InvalidMachO;
+                sections[section_index] = .{
+                    .data = mapped_macho[sect.offset..][0..sect.size],
+                    .owned = false,
+                };
+            }
+        },
+        else => {},
+    };
+
+    const actual_uuid = uuid orelse return error.MissingDebugInfo;
+    if (!mem.eql(u8, &actual_uuid, &expected_uuid)) return error.MissingDebugInfo;
+
+    if (sections[@intFromEnum(Dwarf.Section.Id.debug_info)] == null or
+        sections[@intFromEnum(Dwarf.Section.Id.debug_abbrev)] == null or
+        sections[@intFromEnum(Dwarf.Section.Id.debug_str)] == null or
+        sections[@intFromEnum(Dwarf.Section.Id.debug_line)] == null)
+    {
+        return error.MissingDebugInfo;
+    }
+
+    var dwarf: Dwarf = .{ .sections = sections };
+    errdefer dwarf.deinit(gpa);
+    dwarf.open(gpa, .little) catch |err| switch (err) {
+        error.InvalidDebugInfo,
+        error.EndOfStream,
+        error.Overflow,
+        error.StreamTooLong,
+        => return error.InvalidDwarf,
+
+        error.MissingDebugInfo,
+        error.ReadFailed,
+        error.OutOfMemory,
+        => |e| return e,
+    };
+
+    return .{
+        .mapped_memory = all_mapped_memory,
+        .dwarf = dwarf,
+    };
 }
 
 fn loadOFile(gpa: Allocator, io: Io, o_file_name: []const u8) !OFile {
@@ -527,6 +612,49 @@ fn loadOFile(gpa: Allocator, io: Io, o_file_name: []const u8) !OFile {
     };
 }
 
+fn selectMachOSlice(
+    all_mapped_memory: []align(std.heap.page_size_min) const u8,
+    arch: std.Target.Cpu.Arch,
+) Error![]const u8 {
+    // In most cases, the file we just mapped is a Mach-O binary. However, it could be a "universal
+    // binary": a simple file format which contains Mach-O binaries for multiple targets. For
+    // instance, `/usr/lib/dyld` is currently distributed as a universal binary containing images
+    // for both ARM64 macOS and x86_64 macOS.
+    if (all_mapped_memory.len < 4) return error.InvalidMachO;
+    const magic = std.mem.readInt(u32, all_mapped_memory.ptr[0..4], .little);
+
+    return switch (magic) {
+        macho.MH_MAGIC_64 => all_mapped_memory,
+
+        macho.FAT_CIGAM => mapped_macho: {
+            var fat_r: Io.Reader = .fixed(all_mapped_memory);
+            const hdr = fat_r.takeStruct(macho.fat_header, .big) catch |err| switch (err) {
+                error.ReadFailed => unreachable,
+                error.EndOfStream => return error.InvalidMachO,
+            };
+            const want_cpu_type = switch (arch) {
+                .x86_64 => macho.CPU_TYPE_X86_64,
+                .aarch64 => macho.CPU_TYPE_ARM64,
+                else => unreachable,
+            };
+            for (0..hdr.nfat_arch) |_| {
+                const fat_arch = fat_r.takeStruct(macho.fat_arch, .big) catch |err| switch (err) {
+                    error.ReadFailed => unreachable,
+                    error.EndOfStream => return error.InvalidMachO,
+                };
+                if (fat_arch.cputype != want_cpu_type) continue;
+                if (fat_arch.offset + fat_arch.size > all_mapped_memory.len) return error.InvalidMachO;
+                break :mapped_macho all_mapped_memory[fat_arch.offset..][0..fat_arch.size];
+            }
+            return error.MissingDebugInfo;
+        },
+
+        macho.FAT_CIGAM_64 => return error.UnsupportedDebugInfo,
+
+        else => return error.InvalidMachO,
+    };
+}
+
 /// Uses `mmap` to map the file at `path` into memory.
 fn mapDebugInfoFile(io: Io, path: []const u8) ![]align(std.heap.page_size_min) const u8 {
     const file = Io.Dir.cwd().openFile(io, path, .{}) catch |err| switch (err) {
@@ -548,6 +676,16 @@ fn mapDebugInfoFile(io: Io, path: []const u8) ![]align(std.heap.page_size_min) c
         file.handle,
         0,
     ) catch return error.ReadFailed;
+}
+
+test "adjacent dSYM path uses binary path" {
+    const path = try adjacentDsymPath(testing.allocator, "/tmp/example/tool");
+    defer testing.allocator.free(path);
+
+    try testing.expectEqualStrings(
+        "/tmp/example/tool.dSYM/Contents/Resources/DWARF/tool",
+        path,
+    );
 }
 
 const std = @import("std");
