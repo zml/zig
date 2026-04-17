@@ -20,8 +20,8 @@ pub const Error = error{
 };
 
 pub fn deinit(mf: *MachOFile, gpa: Allocator) void {
-    if (mf.adjacent_dsym) |*maybe_dsym| {
-        if (maybe_dsym.*) |*dsym| {
+    if (mf.adjacent_dsym) |maybe_dsym| {
+        if (maybe_dsym) |*dsym| {
             dsym.deinit(gpa);
         } else |_| {}
     }
@@ -239,13 +239,14 @@ pub fn load(gpa: Allocator, io: Io, path: []const u8, arch: std.Target.Cpu.Arch)
     };
 }
 
-fn getAdjacentDsym(mf: *MachOFile, gpa: Allocator, io: Io) !*DsymFile {
+fn getAdjacentDsym(mf: *MachOFile, gpa: Allocator, io: Io) Error!*DsymFile {
     if (mf.adjacent_dsym == null) {
         mf.adjacent_dsym = loadAdjacentDsym(gpa, io, mf.path, mf.arch, mf.uuid);
     }
-    if (mf.adjacent_dsym.?) |*dsym| {
-        return dsym;
-    } else |err| return err;
+
+    return if (mf.adjacent_dsym.?) |*dsym| {
+        dsym;
+    } else |err| err;
 }
 
 pub fn getDwarfForAddress(mf: *MachOFile, gpa: Allocator, io: Io, vaddr: u64) !struct { *Dwarf, u64 } {
@@ -402,7 +403,7 @@ fn loadAdjacentDsym(
     binary_path: []const u8,
     arch: std.Target.Cpu.Arch,
     opt_expected_uuid: ?Uuid,
-) !DsymFile {
+) Error!DsymFile {
     const expected_uuid = opt_expected_uuid orelse return error.MissingDebugInfo;
     const dsym_path = try adjacentDsymPath(gpa, binary_path);
     defer gpa.free(dsym_path);
@@ -652,7 +653,7 @@ fn selectMachOSlice(
     // instance, `/usr/lib/dyld` is currently distributed as a universal binary containing images
     // for both ARM64 macOS and x86_64 macOS.
     if (all_mapped_memory.len < 4) return error.InvalidMachO;
-    const magic = std.mem.readInt(u32, all_mapped_memory.ptr[0..4], .little);
+    const magic = std.mem.readInt(u32, all_mapped_memory[0..4], .little);
 
     return switch (magic) {
         macho.MH_MAGIC_64 => all_mapped_memory,
@@ -680,9 +681,9 @@ fn selectMachOSlice(
             return error.MissingDebugInfo;
         },
 
-        macho.FAT_CIGAM_64 => return error.UnsupportedDebugInfo,
+        macho.FAT_CIGAM_64 => error.UnsupportedDebugInfo,
 
-        else => return error.InvalidMachO,
+        else => error.InvalidMachO,
     };
 }
 
