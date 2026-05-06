@@ -439,7 +439,13 @@ ZIG_EXTERN_C bool ZigLLVMTargetMachineEmitToFile(LLVMTargetMachineRef targ_machi
 
 void ZigLLVMSetOptBisectLimit(LLVMContextRef context_ref, int limit) {
     static OptBisect opt_bisect;
-    opt_bisect.setLimit(limit);
+    if (limit == 0) {
+        opt_bisect.setIntervals({{0, 0}});
+    } else if (limit > 0) {
+        opt_bisect.setIntervals({{1, limit}});
+    } else {
+        opt_bisect.clearIntervals();
+    }
     unwrap(context_ref)->setOptPassGate(opt_bisect);
 }
 
