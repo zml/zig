@@ -2285,10 +2285,12 @@ pub fn supportsAddressSpace(
         .cog, .hub => arch == .propeller,
         .lut => arch == .propeller and std.Target.propeller.featureSetHas(target.cpu.features, .p2),
 
-        .global, .local, .shared => is_gpu,
+        .global, .local => is_gpu or arch == .kvx,
+        .shared => is_gpu,
         .constant => is_gpu and (context == null or context == .constant),
         .param => is_nvptx,
         .input, .output, .uniform, .push_constant, .storage_buffer, .physical_storage_buffer => is_spirv,
+        .bypass, .preload, .speculate, .scall => arch == .kvx,
     };
 }
 

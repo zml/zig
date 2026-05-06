@@ -949,6 +949,10 @@ pub fn storageClass(module: *Module, as: std.builtin.AddressSpace) spec.StorageC
         .cog,
         .lut,
         .hub,
+        .bypass,
+        .preload,
+        .speculate,
+        .scall,
         => unreachable,
     };
 }

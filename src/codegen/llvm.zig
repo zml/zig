@@ -4622,6 +4622,16 @@ fn llvmAddrSpaceInfo(target: *const std.Target) []const AddrSpaceInfo {
         .m68k => &.{
             .{ .zig = .generic, .llvm = .default, .abi = 16, .pref = 32 },
         },
+        .kvx => &.{
+            .{ .zig = .generic, .llvm = Builder.AddrSpace.kvx.normal, .size = 64, .abi = 64 },
+            .{ .zig = .global, .llvm = Builder.AddrSpace.kvx.ocl_global, .size = 64, .abi = 64 },
+            .{ .zig = .constant, .llvm = Builder.AddrSpace.kvx.ocl_constant, .size = 64, .abi = 64 },
+            .{ .zig = .local, .llvm = Builder.AddrSpace.kvx.ocl_local, .size = 64, .abi = 64 },
+            .{ .zig = .bypass, .llvm = Builder.AddrSpace.kvx.bypass, .size = 64, .abi = 64 },
+            .{ .zig = .preload, .llvm = Builder.AddrSpace.kvx.preload, .size = 64, .abi = 64 },
+            .{ .zig = .speculate, .llvm = Builder.AddrSpace.kvx.speculate, .size = 64, .abi = 64 },
+            .{ .zig = .scall, .llvm = Builder.AddrSpace.kvx.scall, .size = 64, .abi = 64 },
+        },
         else => &.{
             .{ .zig = .generic, .llvm = .default },
         },
