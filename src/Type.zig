@@ -3227,7 +3227,7 @@ fn validateExternCallconv(cc: std.builtin.CallingConvention) bool {
     return switch (cc) {
         // For now we want to authorize PTX kernel to use zig objects, even if we end up exposing the ABI.
         // The goal is to experiment with more integrated CPU/GPU code.
-        .nvptx_kernel => true,
+        .nvptx_kernel, .kvx_lp64, .kvx_ilp32 => true,
         else => !target_util.fnCallConvAllowsZigTypes(cc),
     };
 }
