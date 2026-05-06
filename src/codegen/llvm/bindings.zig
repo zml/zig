@@ -214,6 +214,7 @@ pub extern fn LLVMInitializeVETargetInfo() void;
 pub extern fn LLVMInitializeARCTargetInfo() void;
 pub extern fn LLVMInitializeLoongArchTargetInfo() void;
 pub extern fn LLVMInitializeSPIRVTargetInfo() void;
+pub extern fn LLVMInitializeKVXTargetInfo() void;
 
 pub extern fn LLVMInitializeAArch64Target() void;
 pub extern fn LLVMInitializeAMDGPUTarget() void;
@@ -239,6 +240,7 @@ pub extern fn LLVMInitializeCSKYTarget() void;
 pub extern fn LLVMInitializeARCTarget() void;
 pub extern fn LLVMInitializeLoongArchTarget() void;
 pub extern fn LLVMInitializeSPIRVTarget() void;
+pub extern fn LLVMInitializeKVXTarget() void;
 
 pub extern fn LLVMInitializeAArch64TargetMC() void;
 pub extern fn LLVMInitializeAMDGPUTargetMC() void;
@@ -264,6 +266,7 @@ pub extern fn LLVMInitializeVETargetMC() void;
 pub extern fn LLVMInitializeARCTargetMC() void;
 pub extern fn LLVMInitializeLoongArchTargetMC() void;
 pub extern fn LLVMInitializeSPIRVTargetMC() void;
+pub extern fn LLVMInitializeKVXTargetMC() void;
 
 pub extern fn LLVMInitializeAArch64AsmPrinter() void;
 pub extern fn LLVMInitializeAMDGPUAsmPrinter() void;
@@ -287,6 +290,7 @@ pub extern fn LLVMInitializeVEAsmPrinter() void;
 pub extern fn LLVMInitializeARCAsmPrinter() void;
 pub extern fn LLVMInitializeLoongArchAsmPrinter() void;
 pub extern fn LLVMInitializeSPIRVAsmPrinter() void;
+pub extern fn LLVMInitializeKVXAsmPrinter() void;
 
 pub extern fn LLVMInitializeAArch64AsmParser() void;
 pub extern fn LLVMInitializeAMDGPUAsmParser() void;

@@ -65,6 +65,7 @@ pub fn targetTriple(allocator: Allocator, target: *const std.Target) ![]const u8
         .bpfel => "bpfel",
         .bpfeb => "bpfeb",
         .csky => "csky",
+        .kvx => "kvx",
         .hexagon => "hexagon",
         .loongarch32 => "loongarch32",
         .loongarch64 => "loongarch64",
@@ -110,7 +111,6 @@ pub fn targetTriple(allocator: Allocator, target: *const std.Target) ![]const u8
         .hppa,
         .hppa64,
         .kalimba,
-        .kvx,
         .microblaze,
         .microblazeel,
         .or1k,
@@ -366,6 +366,7 @@ pub fn dataLayout(target: *const std.Target) []const u8 {
         .avr => "e-P1-p:16:8-i8:8-i16:8-i32:8-i64:8-f32:8-f64:8-n8-a:8",
         .bpfeb => "E-m:e-p:64:64-i64:64-i128:128-n32:64-S128",
         .bpfel => "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128",
+        .kvx => "e-S256-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-v64:64-v128:128-v256:256-v512:256-v1024:256-f16:16-f32:32-f64:64-a:0:64-m:e-n32:64",
         .msp430 => "e-m:e-p:16:16-i32:16-i64:16-f32:16-f64:16-a:8-n8:16-S16",
         .mips => "E-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64",
         .mipsel => "e-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64",
@@ -476,7 +477,6 @@ pub fn dataLayout(target: *const std.Target) []const u8 {
         .hppa,
         .hppa64,
         .kalimba,
-        .kvx,
         .microblaze,
         .microblazeel,
         .or1k,
@@ -4899,6 +4899,12 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             bindings.LLVMInitializeSPIRVTargetMC();
             bindings.LLVMInitializeSPIRVAsmPrinter();
         },
+        .kvx => {
+            bindings.LLVMInitializeKVXTarget();
+            bindings.LLVMInitializeKVXTargetInfo();
+            bindings.LLVMInitializeKVXTargetMC();
+            bindings.LLVMInitializeKVXAsmPrinter();
+        },
 
         // LLVM does does not have a backend for these.
         .alpha,
@@ -4906,7 +4912,6 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
         .hppa,
         .hppa64,
         .kalimba,
-        .kvx,
         .microblaze,
         .microblazeel,
         .or1k,
