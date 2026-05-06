@@ -5990,7 +5990,7 @@ fn argsCopyZ(alloc: Allocator, args: []const []const u8) ![:null]?[*:0]u8 {
 }
 
 pub fn clangMain(alloc: Allocator, args: []const []const u8) error{OutOfMemory}!u8 {
-    if (!build_options.have_llvm)
+    if (!build_options.have_llvm_clang)
         fatal("`zig cc` and `zig c++` unavailable: compiler built without LLVM extensions", .{});
 
     var arena_instance = std.heap.ArenaAllocator.init(alloc);
@@ -6004,7 +6004,7 @@ pub fn clangMain(alloc: Allocator, args: []const []const u8) error{OutOfMemory}!
 }
 
 pub fn llvmArMain(alloc: Allocator, args: []const []const u8) error{OutOfMemory}!u8 {
-    if (!build_options.have_llvm)
+    if (!build_options.have_llvm_ar)
         fatal("`zig ar`, `zig dlltool`, `zig ranlib', and `zig lib` unavailable: compiler built without LLVM extensions", .{});
 
     var arena_instance = std.heap.ArenaAllocator.init(alloc);
