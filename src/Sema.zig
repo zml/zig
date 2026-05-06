@@ -22425,6 +22425,7 @@ fn checkVectorElemType(
     switch (ty.zigTypeTag(zcu)) {
         .int, .float, .bool => return,
         .optional, .pointer => if (ty.isPtrAtRuntime(zcu)) return,
+        .@"struct" => if (ty.containerLayout(zcu) == .@"packed") return,
         else => {},
     }
     return sema.fail(block, ty_src, "expected integer, float, bool, or pointer for the vector element type; found '{f}'", .{ty.fmt(pt)});
