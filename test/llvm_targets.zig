@@ -362,5 +362,13 @@ pub fn addCases(
         };
         var case = ctx.addObjLlvm("llvm_targets", b.resolveTargetQuery(target_query));
         case.addCompile("");
+        if (target_query.cpu_arch) |arch| {
+            if (arch.isNvptx()) {
+                case = ctx.addObjLlvm("llvm_targets_nvptx_export_kernel", b.resolveTargetQuery(target_query));
+                case.addCompile(
+                    \\export fn entry() callconv(.kernel) void {}
+                );
+            }
+        }
     }
 }

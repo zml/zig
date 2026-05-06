@@ -1762,7 +1762,14 @@ pub const Object = struct {
 
         const llvm_global_ty = global_index.typeOf(&o.builder);
 
-        // All exports are represented as aliases to the original global.
+        const direct_export_global =
+            zcu.getTarget().cpu.arch.isNvptx() and
+            ty.zigTypeTag(zcu) == .@"fn" and
+            export_indices.len == 1;
+
+        // All exports are represented as aliases to the original global, except that NVPTX
+        // exported functions cannot use aliases so the single-export case renames the function
+        // global directly.
 
         // TODO: we currently do not delete old exports. To do that we'll need to track which
         // globals actually *are* exports.
@@ -1777,8 +1784,12 @@ pub const Object = struct {
             //
             // The name, aliasee, and type will be set within this block. Other properties of the
             // alias will be set below.
-            const alias_global: Builder.Global.Index = global: {
+            const export_global: Builder.Global.Index = global: {
                 const existing_global = o.builder.getGlobal(exp_name) orelse {
+                    if (direct_export_global) {
+                        try global_index.rename(exp_name, &o.builder);
+                        break :global global_index;
+                    }
                     // There is no existing global with this name, so make a new alias.
                     const alias = try o.builder.addAlias(
                         exp_name,
@@ -1792,19 +1803,21 @@ pub const Object = struct {
                 // need to figure out what to do with the existing global instead.
                 switch (existing_global.ptrConst(&o.builder).kind) {
                     .alias => |alias| {
+                        if (direct_export_global) unreachable;
                         // We can just repurpose the existing alias.
                         alias.setAliasee(global_index.toConst(), &o.builder);
                         alias.ptrConst(&o.builder).global.ptr(&o.builder).type = global_index.typeOf(&o.builder);
                         break :global existing_global;
                     },
                     .variable, .function => {
-                        // This must be an extern, which is no good to us---we need an alias. The
-                        // extern should refer to the value we're exporting, so replace it with the
-                        // exported value. That will free up the name for us to create a new alias.
-                        // We need to make a new global which is an alias. Replace this existing one
-                        // with the target global, making the name available and fixing references
-                        // to this global to point to the target.
+                        // This must be an extern. Replace it with the target global, making the
+                        // name available and fixing references to this global to point to the
+                        // target.
                         try existing_global.replace(global_index, &o.builder);
+                        if (direct_export_global) {
+                            try global_index.rename(exp_name, &o.builder);
+                            break :global global_index;
+                        }
                         // The name is now free, so create an alias.
                         const alias = try o.builder.addAlias(
                             exp_name,
@@ -1818,21 +1831,22 @@ pub const Object = struct {
                 }
             };
 
-            // Now for a bit of setup which
+            // We need exported globals to *not* be `unnamed_addr` to ensure that the exported
+            // symbol address equals the address of the original global.
+            export_global.setUnnamedAddr(.default, &o.builder);
 
-            // We need the alias to *not* be `unnamed_addr` to ensure that the alias address equals
-            // the address of the original global.
-            alias_global.setUnnamedAddr(.default, &o.builder);
-
-            if (comp.config.dll_export_fns and exp.opts.visibility != .hidden)
-                alias_global.setDllStorageClass(.dllexport, &o.builder);
-            alias_global.setLinkage(switch (exp.opts.linkage) {
-                .internal => if (o.builder.strip) .private else .internal, // we still did useful work in replacing an existing symbol if there was one
+            if (comp.config.dll_export_fns and exp.opts.visibility != .hidden) {
+                export_global.setDllStorageClass(.dllexport, &o.builder);
+            } else {
+                export_global.setDllStorageClass(.default, &o.builder);
+            }
+            export_global.setLinkage(switch (exp.opts.linkage) {
+                .internal => if (o.builder.strip) .private else .internal,
                 .strong => .external,
                 .weak => .weak_odr,
                 .link_once => .linkonce_odr,
             }, &o.builder);
-            alias_global.setVisibility(switch (exp.opts.visibility) {
+            export_global.setVisibility(switch (exp.opts.visibility) {
                 .default => .default,
                 .hidden => .hidden,
                 .protected => .protected,
