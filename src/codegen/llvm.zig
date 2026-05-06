@@ -2958,6 +2958,32 @@ pub const Object = struct {
         return o.builder.intType(o.zcu.errorSetBits());
     }
 
+    fn llvmTypeOverride(o: *Object, struct_type: InternPool.LoadedStructType) ?Builder.Type {
+        const zcu = o.zcu;
+        const ip = &zcu.intern_pool;
+        const name = ip.getString("llvm.type").unwrap() orelse return null;
+        const namespace = zcu.namespacePtr(struct_type.namespace);
+        const adapter: Zcu.Namespace.NameAdapter = .{ .zcu = zcu };
+        const nav_index = namespace.priv_decls.getKeyAdapted(name, adapter) orelse
+            namespace.pub_decls.getKeyAdapted(name, adapter) orelse return null;
+
+        const nav = ip.getNav(nav_index);
+        if (nav.resolved) |resolved| {
+            return @enumFromInt(Value.fromInterned(resolved.value).toUnsignedInt(zcu));
+        }
+
+        const inst_info = nav.srcInst(ip).resolveFull(ip) orelse return null;
+        const zir = zcu.fileByIndex(inst_info.file).zir orelse return null;
+        const value_body = zir.getDeclaration(inst_info.inst).value_body orelse return null;
+        if (value_body.len == 0) return null;
+
+        const inst = zir.instructions.get(@intFromEnum(value_body[0]));
+        if (inst.tag != .decl_literal) return null;
+
+        const extra = zir.extraData(std.zig.Zir.Inst.Field, inst.data.pl_node.payload_index).data;
+        return std.meta.stringToEnum(Builder.Type, zir.nullTerminatedString(extra.field_name_start));
+    }
+
     pub fn lowerType(o: *Object, t: Type) Allocator.Error!Builder.Type {
         const zcu = o.zcu;
         const target = zcu.getTarget();
@@ -3158,6 +3184,10 @@ pub const Object = struct {
                     const struct_type = ip.loadStructType(t.toIntern());
 
                     if (struct_type.layout == .@"packed") {
+                        if (o.llvmTypeOverride(struct_type)) |llvm_ty| {
+                            try o.type_map.put(o.gpa, t.toIntern(), llvm_ty);
+                            return llvm_ty;
+                        }
                         const int_ty = try o.lowerType(.fromInterned(struct_type.packed_backing_int_type));
                         try o.type_map.put(o.gpa, t.toIntern(), int_ty);
                         return int_ty;
